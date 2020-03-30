@@ -1,0 +1,199 @@
+#! /bin/bash
+# Supremo Installer
+# What this script does:
+#   1. Downloading wine, wget and unzip, if not installed on the system
+#   2. Downloading supremo from official download page
+#   3. Copying supremo to /usr/local/bin/ directory
+#   4. Copying icons to /usr/share/icons/hicolor/*/apps
+#   5. Creating launcher for Supremo
+#   6. Creating service to auto-start Supremo
+#
+# Written by Mohammad Riza Nurtam <muhammadriza@gmail.com>
+# Adapted by Nauel Gomez <g.nauel@gmail.com> for Supremo remote control software
+#
+
+# Print error messages and defining error status with non-zero value
+errMsg() {
+  echo "USAGE:
+To install
+sudo bash supremo-setup install
+
+To remove
+sudo bash supremo-setup remove"
+  exit 1
+}
+
+# Installing dependencies
+depInst() {
+  DISTRIBUTION=`sed "/^ID/s/ID=//gp" -n /etc/os-release`
+  echo -n "Wine is not installed. Installing wine and dependencies..."
+  case $DISTRIBUTION in
+    'fedora' | '"rhel"' | '"centos"' | '"IGN"' )
+      dnf -q -y install wine wget curl > /dev/null 2>&1 || yum -q -y install wine wget curl > /dev/null 2>&1
+      echo "DONE"
+    ;;
+    'ubuntu' | 'debian' | '"elementary"' | 'zorin' | 'linuxmint' | 'kali' | 'neon' )
+      if [ -f /etc/os-release ]
+      then
+        source /etc/os-release
+      fi
+
+      if [ $(echo $VERSION_ID | awk '{printf "%1.0f",$1}') -ge 18 ]
+      then
+        WINEPKG="wine-stable"
+      else
+        WINEPKG="wine"
+      fi
+      apt-get -q -y install $WINEPKG wget curl > /dev/null 2>&1
+      echo "DONE"
+    ;;
+    'arch' )
+      sed -i "/\[multilib\]/,/Include/"'s/^#//' /etc/pacman.conf
+      pacman -Sy
+      pacman -Sq --noconfirm wine wget curl > /dev/null 2>&1
+      echo "DONE"
+    ;;
+    *)
+      echo "FAILED"
+      exit 1
+    ;;
+  esac
+}
+
+# Downloading latest version of Winbox from Mikrotik's website.
+# The URL of the file is parsed from https://mikrotik.com/download
+wbDl() {
+  if [[ -f supremo.exe ]]
+  then
+    echo "Using previously downloaded Supremo.exe"
+  else
+    echo -n "Downloading Supremo...  "
+
+    URL="https://www.supremocontrol.com/download.aspx?file=Supremo.exe&id_sw=7&ws=supremocontrol.com"
+    if [[ $(uname -a | grep -o "x86_64") ]]; then
+      URL=${URL} #64
+    fi
+
+    wget -q -c -O supremo.exe $URL
+    echo "DONE"
+  fi
+}
+
+filesCp() {
+  echo -n "Copying files...  "
+  if [[ !$(mkdir -p /usr/local/bin) ]]
+  then
+    if [[ !$(cp -f supremo.exe /usr/local/bin/supremo.exe) ]]
+    then
+    	cp -f Supremo.sh /usr/local/bin/supremo.sh
+    	chmod a+x /usr/local/bin/supremo.sh
+	    chmod a+x /usr/local/bin/supremo.exe
+	    for size in $( ls -1 icons/supremo-*.png | cut -d\- -f2 | cut -d\. -f1 | paste -sd ' ') ; do
+		    mkdir -p /usr/share/icons/hicolor/${size}/apps/
+		    cp -f icons/supremo-${size}.png /usr/share/icons/hicolor/${size}/apps/supremo.png
+	    done
+      echo "DONE"
+    else
+      echo "FAILED"
+      exit 1
+    fi
+  else
+    echo "FAILED"
+    exit 1
+  fi
+}
+
+lncCrt() {
+  echo -n "Creating application launcher...  "
+  if touch /usr/share/applications/supremo.desktop
+  then
+    echo "[Desktop Entry]" > /usr/share/applications/supremo.desktop
+    echo "Name=Supremo" >> /usr/share/applications/supremo.desktop
+    echo "GenericName=Remote Control Software" >> /usr/share/applications/supremo.desktop
+    echo "Comment=Remote Control Software" >> /usr/share/applications/supremo.desktop
+    echo "Exec=/usr/local/bin/supremo.sh" >> /usr/share/applications/supremo.desktop
+    echo "Icon=supremo" >> /usr/share/applications/supremo.desktop
+    echo "Terminal=false" >> /usr/share/applications/supremo.desktop
+    echo "Type=Application" >> /usr/share/applications/supremo.desktop
+    echo "StartupNotify=true" >> /usr/share/applications/supremo.desktop
+    echo "StartupWMClass=Supremo.exe" >> /usr/share/applications/supremo.desktop
+    echo "Categories=Network;RemoteAccess;" >> /usr/share/applications/supremo.desktop
+    echo "Keywords=supremo;" >> /usr/share/applications/supremo.desktop
+    xdg-desktop-menu forceupdate --mode system
+    echo "DONE"
+  else
+    echo "FAILED"
+    exit 1
+  fi
+}
+
+srvAnsw() {
+  echo "Do you want to autostart Supremo on user login?"
+  select yn in "Yes" "No"; do
+      case $yn in
+          Yes ) srvCrt; exit;;
+          No ) exit;;
+      esac
+  done
+}
+
+srvCrt() {
+  echo -n "Creating application autostart...  "
+  if cp /usr/share/applications/supremo.desktop /home/$SUDO_USER/.config/autostart/supremo.desktop
+  then
+    echo "DONE"
+  else
+    echo "FAILED"
+    exit 1
+  fi
+}
+
+filesRm() {
+  echo -n "Removing launcher...  "
+  find /usr/share/applications/ -name "supremo.desktop" -delete
+  echo "DONE"
+
+  echo -n "Removing icons...  "
+  find /usr/share/icons -name "supremo.png" -delete
+  echo "DONE"
+
+  echo -n "Removing files...  "
+  rm -rf /usr/local/bin/supremo.exe
+  rm -rf /usr/local/bin/supremo.sh
+  rm -rf /home/$SUDO_USER/.config/autostart/supremo.desktop
+  echo "DONE"
+}
+
+if [ -z "$1" ]; then
+  errMsg;
+fi
+case $1 in
+  'install' )
+    if [[ ! $(wine --version) ]]
+    then
+        depInst
+    fi
+    if wbDl
+    then
+      if filesCp
+      then
+        lncCrt
+        srvAnsw
+      else
+        echo "FAILED"
+        exit 1
+      fi
+    else
+      echo "FAILED"
+      exit 1
+    fi
+  ;;
+
+  'remove' )
+    filesRm
+  ;;
+
+  * )
+    errMsg
+  ;;
+esac
