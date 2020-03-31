@@ -11,6 +11,8 @@
 # Written by Mohammad Riza Nurtam <muhammadriza@gmail.com>
 # Adapted by Nauel Gomez <g.nauel@gmail.com> for Supremo remote control software
 #
+# Supremo version: 4.0.5.2299
+#
 
 # Print error messages and defining error status with non-zero value
 errMsg() {
@@ -65,17 +67,16 @@ depInst() {
 wbDl() {
   if [[ -f supremo.exe ]]
   then
-    echo "Using previously downloaded Supremo.exe"
+    echo "Using previously downloaded supremo.exe"
+    echo "Delete file supremo.exe to force download the latest version"
   else
     echo -n "Downloading Supremo...  "
 
     URL="https://www.supremocontrol.com/download.aspx?file=Supremo.exe&id_sw=7&ws=supremocontrol.com"
-    if [[ $(uname -a | grep -o "x86_64") ]]; then
-      URL=${URL} #64
-    fi
 
     wget -q -c -O supremo.exe $URL
     echo "DONE"
+
   fi
 }
 
